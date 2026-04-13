@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>GPS Carte DPS — FFSS</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <style>
   :root {
     --jaune: #F5C400;
@@ -686,7 +686,7 @@
 <div id="toast"></div>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
 // ── STATE ──
 let pdfDoc = null;
@@ -727,33 +727,46 @@ dropzone.addEventListener('drop', e => {
 
 // ── LOAD PDF ──
 async function loadPDF(file) {
+  showToast('⏳ Chargement de la carte...');
   const arrayBuffer = await file.arrayBuffer();
-  pdfDoc = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+
+  // disableWorker fixes Safari iOS worker import errors
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true });
+  pdfDoc = await loadingTask.promise;
   const page = await pdfDoc.getPage(1);
-  const viewport = page.getViewport({scale: renderScale});
-  pdfNativeWidth = viewport.width;
-  pdfNativeHeight = viewport.height;
+
+  // iOS Safari has canvas memory limits — cap renderScale at 1.5
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  renderScale = isIOS ? 1.5 : 2;
+
+  const viewport = page.getViewport({ scale: renderScale });
+  pdfNativeWidth = Math.floor(viewport.width);
+  pdfNativeHeight = Math.floor(viewport.height);
   pdfCanvas.width = pdfNativeWidth;
   pdfCanvas.height = pdfNativeHeight;
-  await page.render({canvasContext: ctx, viewport}).promise;
 
-  // Fit to screen
-  const wrapper = document.getElementById('canvas-wrapper');
-  const ww = wrapper.clientWidth, wh = wrapper.clientHeight;
-  scale = Math.min(ww / pdfNativeWidth, wh / pdfNativeHeight);
-  panX = (ww - pdfNativeWidth * scale) / 2;
-  panY = (wh - pdfNativeHeight * scale) / 2;
-  applyTransform();
+  await page.render({ canvasContext: ctx, viewport }).promise;
 
-  // Show UI
+  // Show UI first so wrapper has layout dimensions
   document.getElementById('dropzone').classList.add('hidden');
   document.getElementById('canvas-wrapper').classList.add('visible');
   document.getElementById('bottom-panel').classList.add('visible');
   document.getElementById('reset-btn').classList.add('visible');
 
+  // Wait for layout to settle before computing fit
+  await new Promise(r => setTimeout(r, 150));
+  const wrapper = document.getElementById('canvas-wrapper');
+  const ww = wrapper.clientWidth, wh = wrapper.clientHeight;
+  scale = Math.min(ww / pdfNativeWidth, wh / pdfNativeHeight);
+  panX = (ww - pdfNativeWidth * scale) / 2;
+  panY = Math.max(0, (wh - pdfNativeHeight * scale) / 2);
+  applyTransform();
+
   setupCanvasEvents();
   showToast('✅ Carte chargée — calibrez 3 points');
-  startClickMode(0);
+
+  // Delay to avoid phantom touches on iOS after file picker closes
+  setTimeout(() => startClickMode(0), 600);
 }
 
 // ── TRANSFORM ──
