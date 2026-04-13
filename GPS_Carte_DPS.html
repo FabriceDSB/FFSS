@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GPS Carte DPS — FFSS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --jaune: #F5C400;
+    --marine: #003875;
+    --marine-light: #0a4d9e;
+    --bg: #0d1f3c;
+    --surface: #112244;
+    --surface2: #1a3060;
+    --text: #e8eef8;
+    --text-dim: #7a9ac0;
+    --accent: #F5C400;
+    --danger: #ff4757;
+    --success: #2ed573;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── HEADER ── */
+  #header {
+    background: var(--marine);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    border-bottom: 3px solid var(--jaune);
+    z-index: 100;
+  }
+  #header .logo-block {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #header .logo-text {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+    color: #fff;
+  }
+  #header .logo-text span {
+    color: var(--jaune);
+    display: block;
+    font-size: 13px;
+  }
+  #header .sep {
+    width: 2px;
+    height: 32px;
+    background: var(--jaune);
+    opacity: 0.5;
+  }
+  #header h1 {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #fff;
+    flex: 1;
+  }
+  #header h1 small {
+    display: block;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--jaune);
+    letter-spacing: 0.08em;
+  }
+
+  /* ── STATUS BAR ── */
+  #statusbar {
+    background: var(--surface);
+    padding: 5px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    font-size: 11px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .status-pill .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .pill-gps { background: rgba(46,213,115,0.15); color: var(--success); }
+  .pill-gps .dot { background: var(--success); animation: pulse 1.5s infinite; }
+  .pill-gps-off { background: rgba(255,71,87,0.15); color: var(--danger); }
+  .pill-gps-off .dot { background: var(--danger); }
+  .pill-cal { background: rgba(245,196,0,0.15); color: var(--jaune); }
+  .pill-cal .dot { background: var(--jaune); }
+  .pill-cal-ok { background: rgba(46,213,115,0.15); color: var(--success); }
+  .pill-cal-ok .dot { background: var(--success); }
+  #accuracy-label { color: var(--text-dim); font-size: 10px; margin-left: auto; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* ── MAIN AREA ── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── DROP ZONE ── */
+  #dropzone {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    z-index: 10;
+    background: var(--bg);
+  }
+  #dropzone.hidden { display: none; }
+  .drop-icon {
+    width: 72px; height: 72px;
+    border: 3px solid var(--jaune);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+  }
+  #dropzone h2 {
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+  }
+  #dropzone p {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.5;
+    max-width: 280px;
+  }
+  .btn-primary {
+    background: var(--jaune);
+    color: var(--marine);
+    border: none;
+    padding: 12px 24px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.15s, opacity 0.15s;
+  }
+  .btn-primary:active { transform: scale(0.97); opacity: 0.9; }
+  #file-input { display: none; }
+
+  /* ── CANVAS WRAPPER ── */
+  #canvas-wrapper {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    touch-action: none;
+    cursor: crosshair;
+    display: none;
+  }
+  #canvas-wrapper.visible { display: block; }
+
+  #pdf-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    transform-origin: 0 0;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+
+  /* GPS marker */
+  #gps-marker {
+    position: absolute;
+    pointer-events: none;
+    z-index: 50;
+    display: none;
+    transform: translate(-50%, -50%);
+  }
+  #gps-marker.visible { display: block; }
+  .gps-outer {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: rgba(46,213,115,0.2);
+    border: 2px solid rgba(46,213,115,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: gps-ring 2s infinite;
+  }
+  .gps-inner {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--success);
+    border: 2px solid #fff;
+    box-shadow: 0 0 8px rgba(46,213,115,0.8);
+  }
+  @keyframes gps-ring {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(46,213,115,0.4); }
+    50% { box-shadow: 0 0 0 12px rgba(46,213,115,0); }
+  }
+
+  /* Calibration point markers */
+  .cal-marker {
+    position: absolute;
+    pointer-events: none;
+    z-index: 40;
+    transform: translate(-50%, -50%);
+  }
+  .cal-marker-dot {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--jaune);
+    border: 2px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--marine);
+  }
+
+  /* ── BOTTOM PANEL ── */
+  #bottom-panel {
+    background: var(--surface);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+    max-height: 42vh;
+    overflow-y: auto;
+    display: none;
+    flex-direction: column;
+  }
+  #bottom-panel.visible { display: flex; }
+
+  .panel-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  .tab {
+    flex: 1;
+    padding: 9px 4px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s;
+  }
+  .tab.active { color: var(--jaune); border-bottom-color: var(--jaune); }
+
+  .tab-content { display: none; padding: 12px 14px; }
+  .tab-content.active { display: block; }
+
+  /* Calibration UI */
+  .cal-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .cal-step:last-child { border-bottom: none; }
+  .cal-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--jaune);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--jaune);
+    flex-shrink: 0;
+  }
+  .cal-num.done { background: var(--jaune); color: var(--marine); border-color: var(--jaune); }
+  .cal-step-body { flex: 1; }
+  .cal-step-body label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .cal-inputs {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .cal-inputs input {
+    flex: 1;
+    min-width: 80px;
+    background: var(--bg);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .cal-inputs input:focus { border-color: var(--jaune); }
+  .cal-inputs input.has-click { border-color: var(--success); }
+  .click-status {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+  .click-status.ok { color: var(--success); }
+
+  .btn-cal {
+    background: var(--jaune);
+    color: var(--marine);
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    margin-top: 10px;
+    width: 100%;
+    letter-spacing: 0.03em;
+    transition: opacity 0.15s;
+  }
+  .btn-cal:disabled { opacity: 0.4; cursor: default; }
+
+  /* Info tab */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .info-card {
+    background: var(--surface2);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .info-card .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .info-card .value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .info-card .value.highlight { color: var(--jaune); }
+
+  /* Zoom controls */
+  #zoom-controls {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 60;
+  }
+  .zoom-btn {
+    width: 40px; height: 40px;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 300;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .zoom-btn:active { background: var(--surface2); }
+
+  /* Center on GPS button */
+  #center-btn {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 48px; height: 48px;
+    background: var(--jaune);
+    border: none;
+    border-radius: 50%;
+    color: var(--marine);
+    font-size: 22px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(245,196,0,0.4);
+    z-index: 60;
+    transition: transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #center-btn.visible { display: flex; }
+  #center-btn:active { transform: scale(0.93); }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 200;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Instruction overlay */
+  #click-instruction {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(245,196,0,0.92);
+    color: var(--marine);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 800;
+    z-index: 70;
+    display: none;
+    pointer-events: none;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+  #click-instruction.visible { display: block; }
+
+  /* Reset button */
+  #reset-btn {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 10px;
+    cursor: pointer;
+    z-index: 60;
+    display: none;
+    letter-spacing: 0.03em;
+  }
+  #reset-btn.visible { display: block; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <div class="logo-block">
+    <svg width="32" height="32" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="100" cy="100" r="90" fill="#003875" stroke="#F5C400" stroke-width="8"/>
+      <path d="M100 30 L170 80 L170 140 L100 170 L30 140 L30 80 Z" fill="none" stroke="#F5C400" stroke-width="6"/>
+      <rect x="85" y="55" width="30" height="90" rx="5" fill="white"/>
+      <rect x="55" y="85" width="90" height="30" rx="5" fill="white"/>
+    </svg>
+    <div class="logo-text"><span>FFSS</span>Secourisme</div>
+  </div>
+  <div class="sep"></div>
+  <h1>GPS Carte DPS<small>Géolocalisation sur carte PDF</small></h1>
+</div>
+
+<!-- STATUS BAR -->
+<div id="statusbar">
+  <div class="status-pill pill-gps-off" id="gps-pill">
+    <div class="dot"></div>
+    <span id="gps-label">GPS inactif</span>
+  </div>
+  <div class="status-pill pill-cal" id="cal-pill">
+    <div class="dot"></div>
+    <span id="cal-label">Non calibré</span>
+  </div>
+  <span id="accuracy-label"></span>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- DROP ZONE -->
+  <div id="dropzone">
+    <div class="drop-icon">🗺️</div>
+    <h2>Charger la carte PDF</h2>
+    <p>Glisse le PDF de la carte ici, ou appuie pour choisir un fichier depuis tes photos / fichiers.</p>
+    <button class="btn-primary" onclick="document.getElementById('file-input').click()">
+      📂 Choisir un fichier PDF
+    </button>
+    <input type="file" id="file-input" accept=".pdf,application/pdf">
+    <p style="font-size:11px; color: var(--text-dim); margin-top:4px;">
+      Fonctionne hors ligne — aucune donnée envoyée sur internet
+    </p>
+  </div>
+
+  <!-- CANVAS -->
+  <div id="canvas-wrapper">
+    <canvas id="pdf-canvas"></canvas>
+    <div id="gps-marker"><div class="gps-outer"><div class="gps-inner"></div></div></div>
+    <div id="zoom-controls">
+      <button class="zoom-btn" onclick="changeZoom(0.25)">+</button>
+      <button class="zoom-btn" onclick="changeZoom(-0.25)">−</button>
+    </div>
+    <button id="reset-btn" onclick="resetAll()">✕ Changer carte</button>
+    <button id="center-btn" onclick="centerOnGPS()" title="Centrer sur ma position">◎</button>
+    <div id="click-instruction"></div>
+  </div>
+
+</div>
+
+<!-- BOTTOM PANEL -->
+<div id="bottom-panel">
+  <div class="panel-tabs">
+    <button class="tab active" onclick="showTab('cal')">📍 Calibration</button>
+    <button class="tab" onclick="showTab('info')">📡 Position</button>
+    <button class="tab" onclick="showTab('help')">❓ Aide</button>
+  </div>
+
+  <!-- CALIBRATION TAB -->
+  <div class="tab-content active" id="tab-cal">
+    <p style="font-size:11px; color:var(--text-dim); margin-bottom:10px; line-height:1.5;">
+      Clique sur <strong style="color:var(--jaune)">3 points reconnaissables</strong> sur la carte, puis saisis leurs coordonnées GPS (depuis Google Maps).
+    </p>
+
+    <!-- Point 1 -->
+    <div class="cal-step">
+      <div class="cal-num" id="num1">1</div>
+      <div class="cal-step-body">
+        <label>Point de référence 1</label>
+        <div class="cal-inputs">
+          <input type="number" id="lat1" placeholder="Latitude (ex: 48.3456)" step="0.000001">
+          <input type="number" id="lon1" placeholder="Longitude (ex: -1.2345)" step="0.000001">
+        </div>
+        <div class="click-status" id="status1">⟶ Clique sur ce point dans la carte</div>
+      </div>
+    </div>
+
+    <!-- Point 2 -->
+    <div class="cal-step">
+      <div class="cal-num" id="num2">2</div>
+      <div class="cal-step-body">
+        <label>Point de référence 2</label>
+        <div class="cal-inputs">
+          <input type="number" id="lat2" placeholder="Latitude" step="0.000001">
+          <input type="number" id="lon2" placeholder="Longitude" step="0.000001">
+        </div>
+        <div class="click-status" id="status2">⟶ Clique sur ce point dans la carte</div>
+      </div>
+    </div>
+
+    <!-- Point 3 -->
+    <div class="cal-step">
+      <div class="cal-num" id="num3">3</div>
+      <div class="cal-step-body">
+        <label>Point de référence 3</label>
+        <div class="cal-inputs">
+          <input type="number" id="lat3" placeholder="Latitude" step="0.000001">
+          <input type="number" id="lon3" placeholder="Longitude" step="0.000001">
+        </div>
+        <div class="click-status" id="status3">⟶ Clique sur ce point dans la carte</div>
+      </div>
+    </div>
+
+    <button class="btn-cal" id="btn-calibrate" onclick="calibrate()" disabled>
+      🎯 Valider la calibration
+    </button>
+    <button class="btn-cal" id="btn-reset-cal" onclick="resetCalibration()" style="background:var(--surface2);color:var(--text);margin-top:6px;display:none;">
+      ↺ Recommencer la calibration
+    </button>
+  </div>
+
+  <!-- INFO TAB -->
+  <div class="tab-content" id="tab-info">
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="label">Latitude</div>
+        <div class="value highlight" id="info-lat">—</div>
+      </div>
+      <div class="info-card">
+        <div class="label">Longitude</div>
+        <div class="value highlight" id="info-lon">—</div>
+      </div>
+      <div class="info-card">
+        <div class="label">Précision GPS</div>
+        <div class="value" id="info-acc">—</div>
+      </div>
+      <div class="info-card">
+        <div class="label">Vitesse</div>
+        <div class="value" id="info-speed">—</div>
+      </div>
+    </div>
+    <div style="margin-top:10px; font-size:11px; color:var(--text-dim); line-height:1.5;" id="info-cal-status">
+      Calibration : <span id="info-cal-text" style="color:var(--danger)">non effectuée</span>
+    </div>
+    <button class="btn-cal" onclick="startGPS()" style="margin-top:10px;" id="btn-gps">
+      📡 Activer le GPS
+    </button>
+  </div>
+
+  <!-- AIDE TAB -->
+  <div class="tab-content" id="tab-help">
+    <div style="font-size:12px; line-height:1.8; color:var(--text-dim);">
+      <p><strong style="color:var(--text)">1. Charger la carte</strong><br>Glisse ou sélectionne le PDF de la carte du trail.</p>
+      <p style="margin-top:8px;"><strong style="color:var(--text)">2. Calibrer (3 points)</strong><br>
+        Pour chaque point : ouvre Google Maps, appuie longuement sur un endroit reconnaissable (croisement, lieu-dit), copie les coordonnées qui apparaissent, puis clique sur ce même endroit dans la carte PDF ici.
+      </p>
+      <p style="margin-top:8px;"><strong style="color:var(--text)">3. Activer le GPS</strong><br>Va dans l'onglet Position et active le GPS. Ta position apparaîtra en vert sur la carte.</p>
+      <p style="margin-top:8px;"><strong style="color:var(--text)">4. Navigation</strong><br>Utilise ◎ pour recentrer la carte sur ta position. Pince pour zoomer.</p>
+      <p style="margin-top:8px; padding: 8px; background: rgba(245,196,0,0.1); border-radius:6px; border-left: 3px solid var(--jaune); color:var(--text);">
+        💡 <strong>Astuce</strong> : Ajoute cette page en favori sur ton écran d'accueil pour un accès rapide en intervention.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── STATE ──
+let pdfDoc = null;
+let pdfCanvas = document.getElementById('pdf-canvas');
+let ctx = pdfCanvas.getContext('2d');
+let scale = 1;
+let panX = 0, panY = 0;
+let isPanning = false;
+let lastTouch = null;
+let lastTwoFingers = null;
+let pdfNativeWidth = 0, pdfNativeHeight = 0;
+let renderScale = 2; // retina
+
+// Calibration
+let calPoints = [{px:null,py:null,lat:null,lon:null},{px:null,py:null,lat:null,lon:null},{px:null,py:null,lat:null,lon:null}];
+let waitingForClick = -1; // index de point attendant un clic
+let isCalibrated = false;
+let transform = null; // {a,b,c,d,tx,ty} pour px→lat/lon
+
+// GPS
+let gpsWatchId = null;
+let lastGpsPos = null;
+
+// ── INIT ──
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadPDF(e.target.files[0]);
+});
+
+const dropzone = document.getElementById('dropzone');
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.style.borderColor='var(--jaune)'; });
+dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor=''; });
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') loadPDF(file);
+  else showToast('⚠️ Fichier PDF requis');
+});
+
+// ── LOAD PDF ──
+async function loadPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  pdfDoc = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+  const page = await pdfDoc.getPage(1);
+  const viewport = page.getViewport({scale: renderScale});
+  pdfNativeWidth = viewport.width;
+  pdfNativeHeight = viewport.height;
+  pdfCanvas.width = pdfNativeWidth;
+  pdfCanvas.height = pdfNativeHeight;
+  await page.render({canvasContext: ctx, viewport}).promise;
+
+  // Fit to screen
+  const wrapper = document.getElementById('canvas-wrapper');
+  const ww = wrapper.clientWidth, wh = wrapper.clientHeight;
+  scale = Math.min(ww / pdfNativeWidth, wh / pdfNativeHeight);
+  panX = (ww - pdfNativeWidth * scale) / 2;
+  panY = (wh - pdfNativeHeight * scale) / 2;
+  applyTransform();
+
+  // Show UI
+  document.getElementById('dropzone').classList.add('hidden');
+  document.getElementById('canvas-wrapper').classList.add('visible');
+  document.getElementById('bottom-panel').classList.add('visible');
+  document.getElementById('reset-btn').classList.add('visible');
+
+  setupCanvasEvents();
+  showToast('✅ Carte chargée — calibrez 3 points');
+  startClickMode(0);
+}
+
+// ── TRANSFORM ──
+function applyTransform() {
+  pdfCanvas.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+  updateGPSMarker();
+  updateCalMarkers();
+}
+
+function changeZoom(delta) {
+  const cx = document.getElementById('canvas-wrapper').clientWidth / 2;
+  const cy = document.getElementById('canvas-wrapper').clientHeight / 2;
+  zoomAt(cx, cy, scale + delta);
+}
+
+function zoomAt(cx, cy, newScale) {
+  newScale = Math.max(0.3, Math.min(8, newScale));
+  const ratio = newScale / scale;
+  panX = cx - ratio * (cx - panX);
+  panY = cy - ratio * (cy - panY);
+  scale = newScale;
+  applyTransform();
+}
+
+// ── CANVAS EVENTS ──
+function setupCanvasEvents() {
+  const wrapper = document.getElementById('canvas-wrapper');
+
+  // Mouse
+  let mouseDown = false, mouseStart = {x:0,y:0}, panStart = {x:0,y:0};
+  let mouseDownTime = 0;
+
+  wrapper.addEventListener('mousedown', e => {
+    mouseDown = true;
+    mouseDownTime = Date.now();
+    mouseStart = {x: e.clientX, y: e.clientY};
+    panStart = {x: panX, y: panY};
+  });
+  wrapper.addEventListener('mousemove', e => {
+    if (!mouseDown) return;
+    panX = panStart.x + (e.clientX - mouseStart.x);
+    panY = panStart.y + (e.clientY - mouseStart.y);
+    applyTransform();
+  });
+  wrapper.addEventListener('mouseup', e => {
+    const dt = Date.now() - mouseDownTime;
+    const dx = Math.abs(e.clientX - mouseStart.x);
+    const dy = Math.abs(e.clientY - mouseStart.y);
+    if (dt < 300 && dx < 8 && dy < 8) handleMapClick(e.clientX, e.clientY);
+    mouseDown = false;
+  });
+
+  // Wheel zoom
+  wrapper.addEventListener('wheel', e => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.2 : 0.2;
+    zoomAt(e.clientX, e.clientY, scale + delta);
+  }, {passive: false});
+
+  // Touch
+  let touchStart = null, touchPanStart = null, pinchDist = null;
+
+  wrapper.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now()};
+      touchPanStart = {x: panX, y: panY};
+      pinchDist = null;
+    } else if (e.touches.length === 2) {
+      pinchDist = getTouchDist(e.touches);
+      lastTwoFingers = {scale, panX, panY, cx: (e.touches[0].clientX+e.touches[1].clientX)/2, cy: (e.touches[0].clientY+e.touches[1].clientY)/2};
+    }
+  }, {passive: true});
+
+  wrapper.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && touchStart) {
+      panX = touchPanStart.x + (e.touches[0].clientX - touchStart.x);
+      panY = touchPanStart.y + (e.touches[0].clientY - touchStart.y);
+      applyTransform();
+    } else if (e.touches.length === 2 && lastTwoFingers) {
+      const newDist = getTouchDist(e.touches);
+      const ratio = newDist / pinchDist;
+      const cx = (e.touches[0].clientX+e.touches[1].clientX)/2;
+      const cy = (e.touches[0].clientY+e.touches[1].clientY)/2;
+      const newScale = Math.max(0.3, Math.min(8, lastTwoFingers.scale * ratio));
+      const scaleRatio = newScale / lastTwoFingers.scale;
+      panX = cx - scaleRatio * (lastTwoFingers.cx - lastTwoFingers.panX);
+      panY = cy - scaleRatio * (lastTwoFingers.cy - lastTwoFingers.panY);
+      scale = newScale;
+      applyTransform();
+    }
+  }, {passive: false});
+
+  wrapper.addEventListener('touchend', e => {
+    if (e.changedTouches.length === 1 && touchStart && e.touches.length === 0) {
+      const t = e.changedTouches[0];
+      const dt = Date.now() - touchStart.t;
+      const dx = Math.abs(t.clientX - touchStart.x);
+      const dy = Math.abs(t.clientY - touchStart.y);
+      if (dt < 400 && dx < 12 && dy < 12) handleMapClick(t.clientX, t.clientY);
+    }
+    touchStart = null;
+    lastTwoFingers = null;
+  }, {passive: true});
+}
+
+function getTouchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+// ── CLICK HANDLER ──
+function handleMapClick(clientX, clientY) {
+  if (waitingForClick < 0) return;
+  const wrapper = document.getElementById('canvas-wrapper');
+  const rect = wrapper.getBoundingClientRect();
+  // Convert screen coords → PDF canvas coords
+  const px = (clientX - rect.left - panX) / scale / renderScale;
+  const py = (clientY - rect.top - panY) / scale / renderScale;
+  setCalPoint(waitingForClick, px, py);
+}
+
+// ── CALIBRATION ──
+function startClickMode(idx) {
+  waitingForClick = idx;
+  const instr = document.getElementById('click-instruction');
+  instr.textContent = `👆 Clique sur le point n°${idx+1} dans la carte`;
+  instr.classList.add('visible');
+  // Open calibration tab
+  showTab('cal');
+}
+
+function setCalPoint(idx, px, py) {
+  calPoints[idx].px = px;
+  calPoints[idx].py = py;
+  const statusEl = document.getElementById(`status${idx+1}`);
+  statusEl.textContent = `✅ Position sur carte enregistrée (${Math.round(px)}, ${Math.round(py)})`;
+  statusEl.classList.add('ok');
+  document.getElementById(`num${idx+1}`).classList.add('done');
+  updateCalMarkers();
+  waitingForClick = -1;
+  document.getElementById('click-instruction').classList.remove('visible');
+  checkCalibrationReady();
+
+  // Auto-advance to next uncaptured point
+  for (let i = 0; i < 3; i++) {
+    if (calPoints[i].px === null) {
+      setTimeout(() => startClickMode(i), 300);
+      break;
+    }
+  }
+}
+
+function checkCalibrationReady() {
+  const allClicked = calPoints.every(p => p.px !== null);
+  const btn = document.getElementById('btn-calibrate');
+  if (allClicked) {
+    btn.disabled = false;
+    showToast('👍 Clics OK — saisis les coordonnées GPS puis valide');
+  }
+}
+
+function calibrate() {
+  // Read GPS inputs
+  for (let i = 0; i < 3; i++) {
+    const lat = parseFloat(document.getElementById(`lat${i+1}`).value);
+    const lon = parseFloat(document.getElementById(`lon${i+1}`).value);
+    if (isNaN(lat) || isNaN(lon)) {
+      showToast(`⚠️ Coordonnées manquantes pour le point ${i+1}`);
+      return;
+    }
+    calPoints[i].lat = lat;
+    calPoints[i].lon = lon;
+  }
+
+  // Compute affine transform px→GPS using least squares (3 points)
+  // [lat]   [a  b] [px]   [tx]
+  // [lon] = [c  d] [py] + [ty]
+  const p = calPoints;
+  // Solve using 3-point exact solution
+  const det = (p[0].px*(p[1].py-p[2].py) + p[1].px*(p[2].py-p[0].py) + p[2].px*(p[0].py-p[1].py));
+  if (Math.abs(det) < 1e-10) {
+    showToast('⚠️ Points alignés — choisir des points non colinéaires');
+    return;
+  }
+
+  // Affine coefficients for lat
+  const a = ((p[0].lat*(p[1].py-p[2].py) + p[1].lat*(p[2].py-p[0].py) + p[2].lat*(p[0].py-p[1].py)) / det);
+  const b = ((p[0].px*(p[1].lat-p[2].lat) + p[1].px*(p[2].lat-p[0].lat) + p[2].px*(p[0].lat-p[1].lat)) / det);
+  const tx = p[0].lat - a*p[0].px - b*p[0].py;
+
+  // Affine coefficients for lon
+  const c = ((p[0].lon*(p[1].py-p[2].py) + p[1].lon*(p[2].py-p[0].py) + p[2].lon*(p[0].py-p[1].py)) / det);
+  const d = ((p[0].px*(p[1].lon-p[2].lon) + p[1].px*(p[2].lon-p[0].lon) + p[2].px*(p[0].lon-p[1].lon)) / det);
+  const ty = p[0].lon - c*p[0].px - d*p[0].py;
+
+  transform = {a, b, c, d, tx, ty};
+  isCalibrated = true;
+
+  // Update UI
+  document.getElementById('cal-pill').className = 'status-pill pill-cal-ok';
+  document.getElementById('cal-label').textContent = 'Calibré ✓';
+  document.getElementById('info-cal-text').textContent = 'effectuée ✓';
+  document.getElementById('info-cal-text').style.color = 'var(--success)';
+  document.getElementById('btn-calibrate').style.display = 'none';
+  document.getElementById('btn-reset-cal').style.display = 'block';
+
+  showToast('🎯 Calibration réussie — GPS activable');
+  showTab('info');
+  startGPS();
+}
+
+function resetCalibration() {
+  calPoints = [{px:null,py:null,lat:null,lon:null},{px:null,py:null,lat:null,lon:null},{px:null,py:null,lat:null,lon:null}];
+  isCalibrated = false;
+  transform = null;
+  waitingForClick = -1;
+  for (let i = 0; i < 3; i++) {
+    document.getElementById(`lat${i+1}`).value = '';
+    document.getElementById(`lon${i+1}`).value = '';
+    document.getElementById(`status${i+1}`).textContent = '⟶ Clique sur ce point dans la carte';
+    document.getElementById(`status${i+1}`).classList.remove('ok');
+    document.getElementById(`num${i+1}`).classList.remove('done');
+  }
+  document.getElementById('btn-calibrate').disabled = true;
+  document.getElementById('btn-calibrate').style.display = 'block';
+  document.getElementById('btn-reset-cal').style.display = 'none';
+  document.getElementById('cal-pill').className = 'status-pill pill-cal';
+  document.getElementById('cal-label').textContent = 'Non calibré';
+  document.getElementById('gps-marker').classList.remove('visible');
+  document.getElementById('center-btn').classList.remove('visible');
+  updateCalMarkers();
+  showTab('cal');
+  startClickMode(0);
+}
+
+// ── GPS ──
+function startGPS() {
+  if (!navigator.geolocation) {
+    showToast('⚠️ GPS non disponible sur cet appareil');
+    return;
+  }
+  if (gpsWatchId !== null) return;
+
+  showToast('📡 Activation du GPS...');
+  gpsWatchId = navigator.geolocation.watchPosition(
+    onGPSSuccess,
+    onGPSError,
+    {enableHighAccuracy: true, maximumAge: 2000, timeout: 10000}
+  );
+}
+
+function onGPSSuccess(pos) {
+  lastGpsPos = pos;
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
+  const acc = pos.coords.accuracy;
+  const speed = pos.coords.speed;
+
+  // Update status
+  document.getElementById('gps-pill').className = 'status-pill pill-gps';
+  document.getElementById('gps-label').textContent = 'GPS actif';
+  document.getElementById('accuracy-label').textContent = `±${Math.round(acc)}m`;
+  document.getElementById('info-lat').textContent = lat.toFixed(6);
+  document.getElementById('info-lon').textContent = lon.toFixed(6);
+  document.getElementById('info-acc').textContent = `±${Math.round(acc)} m`;
+  document.getElementById('info-speed').textContent = speed !== null ? `${Math.round(speed*3.6)} km/h` : '—';
+  document.getElementById('btn-gps').textContent = '✅ GPS actif';
+  document.getElementById('btn-gps').disabled = true;
+
+  if (isCalibrated) {
+    updateGPSMarker();
+    document.getElementById('center-btn').classList.add('visible');
+  }
+}
+
+function onGPSError(err) {
+  document.getElementById('gps-pill').className = 'status-pill pill-gps-off';
+  document.getElementById('gps-label').textContent = 'GPS erreur';
+  let msg = 'Erreur GPS';
+  if (err.code === 1) msg = '⚠️ Autorisation GPS refusée';
+  else if (err.code === 2) msg = '⚠️ Position indisponible';
+  else if (err.code === 3) msg = '⚠️ Timeout GPS';
+  showToast(msg);
+}
+
+// ── GPS MARKER ──
+function gpsToCanvas(lat, lon) {
+  if (!transform) return null;
+  // Inverse of: lat = a*px + b*py + tx, lon = c*px + d*py + ty
+  // Solve 2x2 system
+  const {a,b,c,d,tx,ty} = transform;
+  const lat0 = lat - tx;
+  const lon0 = lon - ty;
+  const det = a*d - b*c;
+  if (Math.abs(det) < 1e-20) return null;
+  const px = (d*lat0 - b*lon0) / det;
+  const py = (a*lon0 - c*lat0) / det;
+  return {px, py};
+}
+
+function updateGPSMarker() {
+  if (!lastGpsPos || !isCalibrated) return;
+  const pos = gpsToCanvas(lastGpsPos.coords.latitude, lastGpsPos.coords.longitude);
+  if (!pos) return;
+  const wrapper = document.getElementById('canvas-wrapper');
+  const screenX = pos.px * renderScale * scale + panX;
+  const screenY = pos.py * renderScale * scale + panY;
+  const marker = document.getElementById('gps-marker');
+  marker.style.left = screenX + 'px';
+  marker.style.top = screenY + 'px';
+  marker.classList.add('visible');
+}
+
+function updateCalMarkers() {
+  // Remove old markers
+  document.querySelectorAll('.cal-marker').forEach(el => el.remove());
+  const wrapper = document.getElementById('canvas-wrapper');
+  for (let i = 0; i < 3; i++) {
+    const p = calPoints[i];
+    if (p.px === null) continue;
+    const screenX = p.px * renderScale * scale + panX;
+    const screenY = p.py * renderScale * scale + panY;
+    const el = document.createElement('div');
+    el.className = 'cal-marker';
+    el.style.left = screenX + 'px';
+    el.style.top = screenY + 'px';
+    el.innerHTML = `<div class="cal-marker-dot">${i+1}</div>`;
+    wrapper.appendChild(el);
+  }
+}
+
+function centerOnGPS() {
+  if (!lastGpsPos || !isCalibrated) return;
+  const pos = gpsToCanvas(lastGpsPos.coords.latitude, lastGpsPos.coords.longitude);
+  if (!pos) return;
+  const wrapper = document.getElementById('canvas-wrapper');
+  const cx = wrapper.clientWidth / 2;
+  const cy = wrapper.clientHeight / 2;
+  panX = cx - pos.px * renderScale * scale;
+  panY = cy - pos.py * renderScale * scale;
+  applyTransform();
+}
+
+// ── TABS ──
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const ids = ['cal','info','help'];
+    t.classList.toggle('active', ids[i] === id);
+  });
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+// ── TOAST ──
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── RESET ──
+function resetAll() {
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  isCalibrated = false;
+  transform = null;
+  lastGpsPos = null;
+  calPoints = [{px:null,py:null,lat:null,lon:null},{px:null,py:null,lat:null,lon:null},{px:null,py:null,lat:null,lon:null}];
+  document.getElementById('gps-marker').classList.remove('visible');
+  document.getElementById('center-btn').classList.remove('visible');
+  document.getElementById('canvas-wrapper').classList.remove('visible');
+  document.getElementById('bottom-panel').classList.remove('visible');
+  document.getElementById('reset-btn').classList.remove('visible');
+  document.getElementById('dropzone').classList.remove('hidden');
+  document.querySelectorAll('.cal-marker').forEach(el => el.remove());
+  document.getElementById('gps-pill').className = 'status-pill pill-gps-off';
+  document.getElementById('gps-label').textContent = 'GPS inactif';
+  document.getElementById('cal-pill').className = 'status-pill pill-cal';
+  document.getElementById('cal-label').textContent = 'Non calibré';
+  document.getElementById('accuracy-label').textContent = '';
+  document.getElementById('file-input').value = '';
+  // Reset cal UI
+  for (let i = 0; i < 3; i++) {
+    document.getElementById(`lat${i+1}`).value = '';
+    document.getElementById(`lon${i+1}`).value = '';
+    document.getElementById(`status${i+1}`).textContent = '⟶ Clique sur ce point dans la carte';
+    document.getElementById(`status${i+1}`).classList.remove('ok');
+    document.getElementById(`num${i+1}`).classList.remove('done');
+  }
+  document.getElementById('btn-calibrate').disabled = true;
+  document.getElementById('btn-calibrate').style.display = 'block';
+  document.getElementById('btn-reset-cal').style.display = 'none';
+  document.getElementById('btn-gps').disabled = false;
+  document.getElementById('btn-gps').textContent = '📡 Activer le GPS';
+  waitingForClick = -1;
+  document.getElementById('click-instruction').classList.remove('visible');
+}
+</script>
+</body>
+</html>
